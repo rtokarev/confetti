@@ -25,21 +25,22 @@ int prscflGetLineNo(prscfl_yyscan_t scanner);
 prscfl_yyscan_t prscflScannerInit(FILE *fh, prscfl_yy_extra_type *yyext);
 void prscflScannerFinish(prscfl_yyscan_t scanner);
 
-typedef struct ParamDef {
-
+typedef struct ValueDef {
 	enum {
-		int32Type 	= 0,
-		int64Type 	= 1,
-		uint32Type 	= 2,
-		uint64Type 	= 3,
-		doubleType 	= 4,
-		stringType 	= 5,
-		boolType 	= 6,
-		commentType = 7,
-		structType 	= 8,
-		arrayType	= 9,
-		builtinType = 10
-	} paramType;
+		undefType	= 0,
+
+		int32Type	= 1,
+		int64Type	= 2,
+		uint32Type	= 3,
+		uint64Type	= 4,
+		doubleType	= 5,
+		stringType	= 6,
+		boolType	= 7,
+		commentType = 8,
+		structType	= 9,
+		arrayType	= 10,
+		builtinType = 11
+	} type;
 
 	union {
 		int32_t			int32val;
@@ -53,11 +54,14 @@ typedef struct ParamDef {
 		struct ParamDef *structval;
 		struct ParamDef *arrayval;
 		char			*builtinval;
-	} paramValue;
+	} value;
+} ValueDef;
 
-	char	*name;
+typedef struct ParamDef {
+	char			*name;
+	ValueDef		value;
 
-	int		flags;
+	int				flags;
 
 	struct ParamDef	*comment;
 	struct ParamDef	*parent;
@@ -68,9 +72,10 @@ typedef struct ParamDef {
 #define PARAMDEF_REQUIRED		(0x02)
 
 ParamDef* parseCfgDef(FILE *fh);
-void hDump(FILE *fh, char *name, ParamDef *def);
+void hDump(FILE *fh, ParamDef *def);
 void dumpStructName(FILE *fh, ParamDef *def, char *delim);
-void cDump(FILE *fh, char *name, ParamDef *def);
+void dumpParamType(FILE *fh, ParamDef *def);
+void cDump(FILE *fh, ParamDef *def);
 void fDump(FILE *fh, ParamDef *def);
 void pDump(FILE *fh, ParamDef *def);
 void HDump(FILE *fh);

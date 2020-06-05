@@ -27,7 +27,7 @@ main(int argc, char* argv[]) {
 	FILE		*fh;
 	char		*name = NULL;
 	int			i, debug = 0;;
-	ParamDef	*def;
+	ParamDef	root, *def;
 
 	opterr=0;
 	while((i=getopt(argc,argv,"i:c:h:f:n:p:H:D")) != EOF) {
@@ -76,8 +76,19 @@ main(int argc, char* argv[]) {
 
 	fclose(fh);
 
+	root.value.type = structType;
+	root.value.value.structval = def;
+	root.name = name;
+	root.parent = NULL;
+	root.next = NULL;
+
+	while (def) {
+		def->parent = &root;
+		def = def->next;
+	}
+
 	if (debug)
-		dDump(def);
+		dDump(&root);
 
 	if ( hfn ) {
 		if (!name)
@@ -89,8 +100,8 @@ main(int argc, char* argv[]) {
 			fprintf(stderr, "Could not open file '%s': %s\n", hfn, strerror(errno));
 			exit(1);
 		}
-	
-		hDump(fh, name, def);
+
+		hDump(fh, &root);
 
 		if (fh != stdout)
 			fclose(fh);
@@ -106,8 +117,8 @@ main(int argc, char* argv[]) {
 			fprintf(stderr, "Could not open file '%s': %s\n", cfn, strerror(errno));
 			exit(1);
 		}
-	
-		cDump(fh, name, def);
+
+		cDump(fh, &root);
 
 		if (fh != stdout)
 			fclose(fh);
@@ -120,8 +131,8 @@ main(int argc, char* argv[]) {
 			fprintf(stderr, "Could not open file '%s': %s\n", cfgfn, strerror(errno));
 			exit(1);
 		}
-	
-		fDump(fh, def);
+
+		fDump(fh, &root);
 
 		if (fh != stdout)
 			fclose(fh);
@@ -134,8 +145,8 @@ main(int argc, char* argv[]) {
 			fprintf(stderr, "Could not open file '%s': %s\n", pfn, strerror(errno));
 			exit(1);
 		}
-	
-		pDump(fh, def);
+
+		pDump(fh, &root);
 
 		if (fh != stdout)
 			fclose(fh);
@@ -148,7 +159,7 @@ main(int argc, char* argv[]) {
 			fprintf(stderr, "Could not open file '%s': %s\n", Hfn, strerror(errno));
 			exit(1);
 		}
-	
+
 		HDump(fh);
 
 		if (fh != stdout)

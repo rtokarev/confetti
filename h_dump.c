@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 #include <inttypes.h>
 #include <stdlib.h>
@@ -5,20 +6,22 @@
 #include <prscfl.h>
 
 
-void 
+void
 dumpStructName(FILE *fh, ParamDef *def, char *delim) {
-	if (def && def->parent) {
-		ParamDef	*p = def->parent;
+	if (!def)
+		return;
 
-		if (p->name == NULL)
-			p = p->parent;
+	dumpStructName(fh, def->parent, delim);
 
-		if (p != NULL) {
-			dumpStructName(fh, p, delim);
-			fputs(delim, fh);
-			fputs(p->name, fh);
+	if (def->parent) {
+		fputs(delim, fh);
+		if (def->parent->value.type == arrayType) {
+			fputs("val", fh);
+			return;
 		}
 	}
+
+	fputs(def->name, fh);
 }
 
 static void
@@ -28,154 +31,152 @@ dumpComment(FILE *fh, ParamDef *def, int istab) {
 
 		if (i->next) {
 			/* multiline comment */
-			fprintf(fh, "\n%s/*\n", istab ? "\t" : "");
+			fprintf(fh, "%s/*\n", istab ? "\t" : "");
 			while(i) {
-				fprintf(fh, "%s * %s\n", istab ? "\t" : "", i->paramValue.commentval);
+				fprintf(fh, "%s * %s\n", istab ? "\t" : "", i->value.value.commentval);
 				i = i->next;
 			}
 			fprintf(fh, "%s */\n", istab ? "\t" : "");
 		} else {
 			/* single line comment */
-			fprintf(fh, "\n%s/* %s */\n", istab ? "\t" : "", i->paramValue.commentval);
+			fprintf(fh, "%s/* %s */\n", istab ? "\t" : "", i->value.value.commentval);
 		}
 	}
 }
 
-static void
-dumpParamDef(FILE *fh, char* name, ParamDef *def) {
-	
-	dumpComment(fh, def, 1);
-	
-	switch(def->paramType) {
+void
+dumpParamType(FILE *fh, ParamDef *def)
+{
+	switch(def->value.type) {
 		case	int32Type:
-			fprintf(fh, "\tint32_t\t%s;\n", def->name);
+			fprintf(fh, "int32_t");
 			break;
 		case	uint32Type:
-			fprintf(fh, "\tu_int32_t\t%s;\n", def->name);
+			fprintf(fh, "uint32_t");
 			break;
 		case	int64Type:
-			fprintf(fh, "\tint64_t\t%s;\n", def->name);
+			fprintf(fh, "int64_t");
 			break;
 		case	uint64Type:
-			fprintf(fh, "\tu_int64_t\t%s;\n", def->name);
+			fprintf(fh, "uint64_t");
 			break;
 		case	doubleType:
-			fprintf(fh, "\tdouble\t%s;\n", def->name);
+			fprintf(fh, "double");
 			break;
 		case	stringType:
-			fprintf(fh, "\tchar*\t%s;\n", def->name);
+			fprintf(fh, "char *");
 			break;
 		case	boolType:
-			fprintf(fh, "\tconfetti_bool_t\t%s;\n", def->name);
-			break;
-		case	commentType:
-			fprintf(stderr, "Unexpected comment"); 
+			fprintf(fh, "confetti_bool_t");
 			break;
 		case	structType:
-			fprintf(fh, "\t%s", name);
-			dumpStructName(fh, def->paramValue.structval, "_");
-			fprintf(fh, "*\t%s;\n", def->name);
-			break;
 		case	arrayType:
-			fprintf(fh, "\t%s", name);
-			dumpStructName(fh, def->paramValue.arrayval->paramValue.structval, "_");
-			fprintf(fh, "**\t%s;\n", def->name);
+			dumpStructName(fh, def, "_");
 			break;
-		case 	builtinType:
+		case	commentType:
+			fprintf(stderr, "Unexpected comment");
+			exit(1);
 			break;
 		default:
-			fprintf(stderr,"Unknown paramType (%d)\n", def->paramType);
+			fprintf(stderr, "Unknown value.type (%d)\n", def->value.type);
 			exit(1);
 	}
 }
 
 static void
-dumpParamList(FILE *fh, char* name, ParamDef *def) {
+dumpParamDef(FILE *fh, ParamDef *def) {
+	dumpComment(fh, def, 1);
+
+	if (def->value.type == builtinType)
+		return;
+
+	fprintf(fh, "\t");
+	dumpParamType(fh, def);
+	fprintf(fh, " %s;\n", def->name);
+}
+
+static void
+dumpParamList(FILE *fh, ParamDef *def) {
 	while(def) {
-		dumpParamDef(fh, name, def);
+		dumpParamDef(fh, def);
 		def = def->next;
 	}
 }
 
 static void
-dumpStruct(FILE *fh, char* name, ParamDef *def) {
-	ParamDef *list = NULL;
-
-	switch(def->paramType) {
-		case structType:
-			list = def->paramValue.structval;
-			break;
-		case arrayType:
-			list = def->paramValue.arrayval->paramValue.structval;
-			break;
-		default:
-			fprintf(stderr,"Non-struct paramType (%d)\n", def->paramType);
-			exit(1);
-			break;
-	}
-
-	fprintf(fh, "typedef struct %s", name);
-	dumpStructName(fh, list, "_");
+dumpStruct(FILE *fh, ParamDef *def) {
+	fputs("typedef struct ", fh);
+	dumpParamType(fh, def);
 	fputs(" {\n", fh);
 	fputs("\tunsigned char __confetti_flags;\n\n", fh);
-	dumpParamList(fh, name, list);
-	fprintf(fh, "} %s", name);
-	dumpStructName(fh, list, "_");
+	dumpParamList(fh, def->value.value.structval);
+	fputs("} ", fh);
+	dumpParamType(fh, def);
 	fputs(";\n\n", fh);
 }
 
 static void
-dumpRecursive(FILE *fh, char* name, ParamDef *def) {
+dumpArray(FILE *fh, ParamDef *def) {
+	fputs("typedef struct ", fh);
+	dumpParamType(fh, def);
+	fputs(" {\n", fh);
+	fputs("\tunsigned char __confetti_flags;\n\n", fh);
+	fputs("\t", fh);
+	dumpParamType(fh, def->value.value.arrayval);
+	fputs(" * val;\n", fh);
+	fputs("\tuint32_t n;\n", fh);
+	fputs("} ", fh);
+	dumpParamType(fh, def);
+	fputs(";\n\n", fh);
 
+}
+
+static void
+dumpRecursive(FILE *fh, ParamDef *def) {
 	while(def) {
-		switch(def->paramType) {
+		switch(def->value.type) {
 			case structType:
-				dumpRecursive(fh, name, def->paramValue.structval);
-				dumpStruct(fh, name, def);
+				dumpRecursive(fh, def->value.value.structval);
+				dumpStruct(fh, def);
 				break;
 			case arrayType:
-				dumpComment(fh, def->paramValue.arrayval, 0);
-				dumpRecursive(fh, name, def->paramValue.arrayval->paramValue.structval);
-				dumpStruct(fh, name, def);
+				dumpComment(fh, def->value.value.arrayval, 0);
+				dumpRecursive(fh, def->value.value.arrayval);
+				dumpArray(fh, def);
 				break;
 			default:
 				break;
 		}
+
+		if (def->parent && def->parent->value.type == arrayType)
+			break;
 
 		def = def->next;
 	}
 }
 
 void 
-hDump(FILE *fh, char* name, ParamDef *def) {
-	ParamDef	root;
+hDump(FILE *fh, ParamDef *root) {
+	fprintf(fh, "#ifndef %s_CFG_H\n", root->name);
+	fprintf(fh, "#define %s_CFG_H\n\n", root->name);
 
-	root.paramType = structType;
-	root.paramValue.structval = def;
-	root.name = NULL;
-	root.parent = NULL;
-	root.next = NULL;
-	def->parent = &root;
-
-	fprintf(fh, "#ifndef %s_CFG_H\n", name);
-	fprintf(fh, "#define %s_CFG_H\n\n", name);
-	
 	fputs(
+		"/*\n"
+		" * Autogenerated file, do not edit it!\n"
+		" */\n\n"
 		"#include <stdio.h>\n"
 		"#include <stdbool.h>\n"
+		"#include <stdint.h>\n"
 		"#include <sys/types.h>\n\n"
 		"#ifndef confetti_bool_t\n"
 		"#define confetti_bool_t char\n"
-		"#endif\n\n"
-		"/*\n"
-		" * Autogenerated file, do not edit it!\n"
-		" */\n\n",
+		"#endif\n\n",
 		fh
 	);
 
-	dumpRecursive(fh, name, &root);
+	dumpRecursive(fh, root);
 
-	fprintf(fh, 
+	fprintf(fh,
 		"#ifndef CNF_FLAG_STRUCT_NEW\n"
 		"#define CNF_FLAG_STRUCT_NEW\t0x01\n"
 		"#endif\n"
@@ -183,25 +184,23 @@ hDump(FILE *fh, char* name, ParamDef *def) {
 		"#define CNF_FLAG_STRUCT_NOTSET\t0x02\n"
 		"#endif\n"
 		"#ifndef CNF_STRUCT_DEFINED\n"
-		"#define CNF_STRUCT_DEFINED(s) ((s) != NULL && ((s)->__confetti_flags & CNF_FLAG_STRUCT_NOTSET) == 0)\n"
+		"#define CNF_STRUCT_DEFINED(s) (((s)->__confetti_flags & CNF_FLAG_STRUCT_NOTSET) == 0)\n"
 		"#endif\n\n"
 	);
 
-	fprintf(fh, "void init_%s(%s *c);\n\n", name, name);
-	fprintf(fh, "int fill_default_%s(%s *c);\n\n", name, name);
+	fprintf(fh, "void init_%s(%s *c);\n\n", root->name, root->name);
+	fprintf(fh, "int fill_default_%s(%s *c, unsigned char flags);\n\n", root->name, root->name);
 	fprintf(fh, "void swap_%s(struct %s *c1, struct %s *c2);\n\n",
-		name, name, name);
-	fprintf(fh, "int parse_cfg_file_%s(%s *c, FILE *fh, int check_rdonly, int *n_accepted, int *n_skipped, int *n_optional);\n\n", name, name);
-	fprintf(fh, "int parse_cfg_buffer_%s(%s *c, char *buffer, int check_rdonly, int *n_accepted, int *n_skipped, int *n_optional);\n\n", name, name);
-	fprintf(fh, "int check_cfg_%s(%s *c);\n\n", name, name);
-	fprintf(fh, "int dup_%s(%s *dst, %s *src);\n\n", name, name, name);
-	fprintf(fh, "void destroy_%s(%s *c);\n\n", name, name);
-	fprintf(fh, "char *cmp_%s(%s* c1, %s* c2, int only_check_rdonly);\n\n", name, name, name);
-	fprintf(fh, "typedef struct %s_iterator_t %s_iterator_t;\n", name, name);
-	fprintf(fh, "%s_iterator_t* %s_iterator_init();\n", name, name);
-	fprintf(fh, "char* %s_iterator_next(%s_iterator_t* i, %s *c, char **v);\n\n", name, name, name);
+		root->name, root->name, root->name);
+	fprintf(fh, "void destroy_%s(%s *c);\n\n", root->name, root->name);
+	fprintf(fh, "int parse_cfg_file_%s(%s *c, FILE *fh, int check_rdonly, int *n_accepted, int *n_skipped, int *n_optional);\n\n", root->name, root->name);
+	fprintf(fh, "int parse_cfg_buffer_%s(%s *c, char *buffer, int check_rdonly, int *n_accepted, int *n_skipped, int *n_optional);\n\n", root->name, root->name);
+	fprintf(fh, "int check_cfg_%s(%s *c);\n\n", root->name, root->name);
+	fprintf(fh, "int dup_%s(%s *dst, %s *src);\n\n", root->name, root->name, root->name);
+	fprintf(fh, "char *cmp_%s(%s* c1, %s* c2, int only_check_rdonly);\n\n", root->name, root->name, root->name);
+	fprintf(fh, "typedef struct %s_iterator_t %s_iterator_t;\n", root->name, root->name);
+	fprintf(fh, "%s_iterator_t* %s_iterator_init();\n", root->name, root->name);
+	fprintf(fh, "char* %s_iterator_next(%s_iterator_t* i, %s *c, char **v);\n\n", root->name, root->name, root->name);
 
 	fputs("#endif\n", fh);
-
-	def->parent = NULL;
 }

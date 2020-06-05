@@ -1,6 +1,5 @@
 Could not accept read only 'ro_struct.f1' option
-Could not accept read only 'array_of_ro_structs[0].f1' option
-==========Accepted: 37; Skipped: 2; Optional: 0===========
+==========Accepted: 63; Skipped: 1; Optional: 0===========
 foo => '1234'
 bar => '-987654'
 asdf.k1 => 'as"d'
@@ -15,7 +14,7 @@ asdf.array[0].subarray[1].subke12 => '111'
 asdf.array[1].qwerty => '1'
 asdf.array[1].qwer1 => '2'
 asdf.array[1].substruct.sss => 'FOO'
-asdf.array[1].subarray[0].subkey => '1123'
+asdf.array[1].subarray[0].subkey => '12'
 asdf.array[1].subarray[0].subke12 => '10001'
 asdf.array[1].subarray[1].subkey => '12'
 asdf.array[1].subarray[1].subke12 => '10002'
@@ -23,15 +22,7 @@ asdf.array[1].subarray[2].subkey => '12'
 asdf.array[1].subarray[2].subke12 => '10003'
 asdf.array[2].qwerty => '100001'
 asdf.array[2].qwer1 => '100002'
-asdf.array[2].substruct.sss => '/path-to/something/%d._log'
-asdf.array[2].subarray[0].subkey => '12'
-asdf.array[2].subarray[0].subke12 => '7654'
-asdf.array[2].subarray[1].subkey => '12'
-asdf.array[2].subarray[1].subke12 => '7654'
-asdf.array[2].subarray[2].subkey => '12'
-asdf.array[2].subarray[2].subke12 => '7654'
-asdf.array[2].subarray[3].subkey => '123456789'
-asdf.array[2].subarray[3].subke12 => '7654'
+asdf.array[2].substruct.sss => 'asdf.array.substruct.sss'
 asdf.k3 => 'NOTNULL'
 root_array[0].ra => '-1e-09'
 root_array[1].ra => '-1.344e-08'
@@ -41,10 +32,9 @@ root_array[4].ra => '13'
 test[0].e => '0'
 test[1].e => '1'
 test[2].e => '2'
-empty[0].wow => (null)
 ro_struct.f1 => '1'
 ro_struct.f2 => '2'
-array_of_ro_structs[0].f1 => '1'
+array_of_ro_structs[0].f1 => '2'
 array_of_ro_structs[0].f2 => '2'
 required_struct_with_structs.f1 => '1'
 required_struct_with_structs.f2 => '2'
@@ -72,10 +62,12 @@ flst => 'true'
 ==========Check===========
 Option 'foo' is not set (or has a default value)
 Option 'asdf.array[0].subarray[0].subke12' is not set (or has a default value)
-Option 'asdf.array[2].subarray[3].subke12' is not set (or has a default value)
+Option 'asdf.array[2].substruct.sss' is not set (or has a default value)
+Option 'root_array[1].ra' is not set (or has a default value)
+Option 'root_array[2].ra' is not set (or has a default value)
 Option 'test[1]' is not set
 Option 'array_with_required_structs_with_structs[1]' is not set
-Missed required: 5
+Missed required: 7
 root_array[1] is not defined
 root_array[2] is not defined
 ==========Dup=============
@@ -93,7 +85,7 @@ asdf.array[0].subarray[1].subke12 => '111'
 asdf.array[1].qwerty => '1'
 asdf.array[1].qwer1 => '2'
 asdf.array[1].substruct.sss => 'FOO'
-asdf.array[1].subarray[0].subkey => '1123'
+asdf.array[1].subarray[0].subkey => '12'
 asdf.array[1].subarray[0].subke12 => '10001'
 asdf.array[1].subarray[1].subkey => '12'
 asdf.array[1].subarray[1].subke12 => '10002'
@@ -101,15 +93,7 @@ asdf.array[1].subarray[2].subkey => '12'
 asdf.array[1].subarray[2].subke12 => '10003'
 asdf.array[2].qwerty => '100001'
 asdf.array[2].qwer1 => '100002'
-asdf.array[2].substruct.sss => '/path-to/something/%d._log'
-asdf.array[2].subarray[0].subkey => '12'
-asdf.array[2].subarray[0].subke12 => '7654'
-asdf.array[2].subarray[1].subkey => '12'
-asdf.array[2].subarray[1].subke12 => '7654'
-asdf.array[2].subarray[2].subkey => '12'
-asdf.array[2].subarray[2].subke12 => '7654'
-asdf.array[2].subarray[3].subkey => '123456789'
-asdf.array[2].subarray[3].subke12 => '7654'
+asdf.array[2].substruct.sss => 'asdf.array.substruct.sss'
 asdf.k3 => 'NOTNULL'
 root_array[0].ra => '-1e-09'
 root_array[1].ra => '-1.344e-08'
@@ -119,10 +103,9 @@ root_array[4].ra => '13'
 test[0].e => '0'
 test[1].e => '1'
 test[2].e => '2'
-empty[0].wow => (null)
 ro_struct.f1 => '1'
 ro_struct.f2 => '2'
-array_of_ro_structs[0].f1 => '1'
+array_of_ro_structs[0].f1 => '2'
 array_of_ro_structs[0].f2 => '2'
 required_struct_with_structs.f1 => '1'
 required_struct_with_structs.f2 => '2'

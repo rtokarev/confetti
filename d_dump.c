@@ -10,9 +10,9 @@ putt(int level) {
 		putchar('\t');
 }
 
-static void 
+static void
 printDef(char *type, ParamDef *def) {
-	printf("%s (%s%s)\t%s\n", 
+	printf("%s (%s%s)\t%s\n",
 				type,
 				(def->flags & PARAMDEF_RDONLY) ? "RO" : "RW",
 				(def->flags & PARAMDEF_REQUIRED) ? ", REQ" : "",
@@ -24,7 +24,7 @@ debugParamDef(ParamDef *def, int level) {
 
 	while(def) {
 		putt(level);
-		switch(def->paramType) {
+		switch(def->value.type) {
 			case	int32Type:
 				printDef("int32_t", def);
 				break;
@@ -47,28 +47,28 @@ debugParamDef(ParamDef *def, int level) {
 				printDef("bool", def);
 				break;
 			case	commentType:
-				fprintf(stderr, "Unexpected comment"); 
+				fprintf(stderr, "Unexpected comment");
 				break;
 			case	structType:
 				printDef("struct", def);
-				debugParamDef(def->paramValue.structval, level+1);
+				debugParamDef(def->value.value.structval, level+1);
 				break;
 			case	arrayType:
 				printDef("array", def);
-				debugParamDef(def->paramValue.arrayval, level+1);
+				debugParamDef(def->value.value.arrayval, level+1);
 				break;
-			case 	builtinType:
+			case	builtinType:
 				printf("BUILTIN\n");
 				break;
 			default:
-				fprintf(stderr,"Unknown paramType (%d)\n", def->paramType);
+				fprintf(stderr,"Unknown value.type (%d)\n", def->value.type);
 				exit(1);
 		}
 		def = def->next;
 	}
 }
 
-void 
+void
 dDump(ParamDef *def) {
-	debugParamDef(def, 0);
+	debugParamDef(def->value.value.structval, 0);
 }

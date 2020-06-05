@@ -9,18 +9,19 @@
 #include <prscfl_gram.h>
 
 static int prscfl_yyerror(prscfl_yyscan_t yyscanner, const char *msg);
+static ParamDef *makeScalarParam(char *name, ValueDef *value);
+static bool prscflParamDefEq(const ParamDef *p1, const ParamDef *p2);
 extern int prscfl_yylex (YYSTYPE * yylval_param, prscfl_yyscan_t yyscanner);
+
 static ParamDef	*output;
 
-#define MakeScalarParam(r, t, n, v)	do {  	\
-	(r) = malloc(sizeof(ParamDef));			\
-	(r)->paramType = t##Type;				\
-	(r)->paramValue.t##val = (v);			\
-	(r)->name = (n);						\
-	(r)->comment = NULL;					\
-	(r)->flags = 0;							\
-	(r)->parent = NULL;						\
-	(r)->next = NULL;						\
+#define MakeValue(r, t, v) do {	\
+	(r) = (ValueDef){			\
+		.type	= t##Type,		\
+		.value	= {				\
+			.t##val	= (v)		\
+		}						\
+	};							\
 } while(0)
 
 #define MakeList(r, f, l)					\
@@ -39,16 +40,16 @@ static ParamDef	*output;
 	}										\
 } while(0)
 
-#define PropagateStructFlags(s, f) do {					\
-	if ((s)->paramType == structType && ((f) & PARAMDEF_RDONLY)) {	\
-		ParamDef *child_def = (s)->paramValue.structval;	\
-									\
-		while(child_def) {					\
-			child_def->flags |= PARAMDEF_RDONLY;		\
-									\
-			child_def = child_def->next;			\
-		}							\
-	}								\
+#define PropagateStructFlags(s, f) do {								\
+	if ((s)->value.type == structType && ((f) & PARAMDEF_RDONLY)) {	\
+		ParamDef *child_def = (s)->value.value.structval;			\
+																	\
+		while(child_def) {											\
+			child_def->flags |= PARAMDEF_RDONLY;					\
+																	\
+			child_def = child_def->next;							\
+		}															\
+	}																\
 } while(0)
 
 %}
@@ -62,17 +63,20 @@ static ParamDef	*output;
 %lex-param   {prscfl_yyscan_t yyscanner}
 
 %union		 {
-	int32_t		int32val;	
-	u_int32_t	uint32val;	
-	int64_t		int64val;	
-	u_int64_t	uint64val;	
+	int32_t		int32val;
+	u_int32_t	uint32val;
+	int64_t		int64val;
+	u_int64_t	uint64val;
 	double		doubleval;
 	char		*str;
 
+	ValueDef	value;
 	ParamDef	*node;
 }
 
 %type	<str>		identifier
+%type	<value>		value
+%type	<node>		list_value value_list
 %type	<node>		param param_list
 %type	<node>		commented_param
 %type	<node>		comment comment_opt
@@ -80,7 +84,7 @@ static ParamDef	*output;
 %type	<int32val>	flags_opt flag flag_list
 
 %token	<str>		KEY_P NULL_P STRING_P COMMENT_P RDONLY_P RDWR_P
-					BUILTIN_P REQUIRED_P FALSE_P TRUE_P 
+					BUILTIN_P REQUIRED_P FALSE_P TRUE_P
 %token	<int32val>	INT32_P
 %token	<uint32val>	UINT32_P
 %token	<int64val>	INT64_P
@@ -91,9 +95,11 @@ static ParamDef	*output;
 
 cfg:
 	BUILTIN_P param_list	{
+				ValueDef	v;
 				ParamDef	*b;
 
-				MakeScalarParam(b, builtin, NULL, $1);
+				MakeValue(v, builtin, $1);
+				b = makeScalarParam(NULL, &v);
 				MakeList($$, b, $2);
 				output = $$;
 			}
@@ -116,10 +122,18 @@ param_list:
 	;
 
 comment:
-	COMMENT_P							{ MakeScalarParam($$, comment, NULL, $1); }
+	COMMENT_P							{
+			ValueDef    v;
+
+			MakeValue(v, comment, $1);
+			$$ = makeScalarParam(NULL, &v);
+		}
 	| COMMENT_P comment					{
+			ValueDef	v;
 			ParamDef	*comment;
-			MakeScalarParam(comment, comment, NULL, $1);
+
+			MakeValue(v, comment, $1);
+			comment = makeScalarParam(NULL, &v);
 			MakeList($$, comment, $2);
 		}
 	;
@@ -130,9 +144,9 @@ comment_opt:
 	;
 
 flag:
-	RDWR_P					{ $$ = 0; }
-	| RDONLY_P				{ $$ = PARAMDEF_RDONLY; }
-	| REQUIRED_P			{ $$ = PARAMDEF_REQUIRED; }
+	RDWR_P					{ $$ = 0; free($1); }
+	| RDONLY_P				{ $$ = PARAMDEF_RDONLY; free($1); }
+	| REQUIRED_P			{ $$ = PARAMDEF_REQUIRED; free($1); }
 	;
 
 flag_list:
@@ -152,33 +166,62 @@ commented_param:
 		}
 	;
 
+value:
+	INT32_P												{ MakeValue($$, int32, $1); }
+	| UINT32_P											{ MakeValue($$, uint32, $1); }
+	| INT64_P											{ MakeValue($$, int64, $1); }
+	| UINT64_P											{ MakeValue($$, uint64, $1); }
+	| DOUBLE_P											{ MakeValue($$, double, $1); }
+	| STRING_P											{ MakeValue($$, string, $1); }
+	| NULL_P											{ MakeValue($$, string, NULL); }
+	| TRUE_P											{ MakeValue($$, bool, true); free($1); }
+	| FALSE_P											{ MakeValue($$, bool, false); free($1); }
+	| '{' param_list '}'								{ MakeValue($$, struct, $2); }
+	| '[' param_list ']'								{
+															ValueDef v;
+															ParamDef *p;
+
+															MakeValue(v, struct, $2);
+															p = makeScalarParam(NULL, &v);
+															SetParent(p, $2);
+
+															MakeValue($$, array, p);
+														}
+	| '[' value_list ']'								{ MakeValue($$, array, $2);	}
+	;
+
+list_value:
+	comment_opt value flags_opt	{
+									$$ = makeScalarParam(NULL, &$2);
+									$$->comment = $1;
+									$$->flags = $3;
+									if ($2.type == structType) {
+										PropagateStructFlags($$, $3);
+										SetParent($$, $2.value.structval);
+									} else if ($2.type == arrayType)
+										SetParent($$, $2.value.arrayval);
+								}
+	;
+
+value_list:
+	list_value				{ $$ = $1; }
+	| list_value value_list	{
+								if (prscflParamDefEq($1, $2) == false) {
+									prscfl_yyerror(yyscanner, "array values must be the same type");
+									YYERROR;
+								}
+								MakeList($$, $1, $2);
+							}
+	;
+
 param:
-	identifier '=' INT32_P				{ MakeScalarParam($$, int32, $1, $3); }
-	| identifier '=' UINT32_P			{ MakeScalarParam($$, uint32, $1, $3); }
-	| identifier '=' INT64_P			{ MakeScalarParam($$, int64, $1, $3); }
-	| identifier '=' UINT64_P			{ MakeScalarParam($$, uint64, $1, $3); }
-	| identifier '=' DOUBLE_P			{ MakeScalarParam($$, double, $1, $3); }
-	| identifier '=' STRING_P			{ MakeScalarParam($$, string, $1, $3); }
-	| identifier '=' NULL_P				{ MakeScalarParam($$, string, $1, NULL); }
-	| identifier '=' TRUE_P				{ MakeScalarParam($$, bool, $1, true); }
-	| identifier '=' FALSE_P			{ MakeScalarParam($$, bool, $1, false); }
-	| identifier '=' '{' param_list '}' { MakeScalarParam($$, struct, $1, $4); SetParent( $$, $4 ); }
-	| identifier '=' '[' param_list ']' {
-											ParamDef *s;
-
-											MakeScalarParam(s, struct, NULL, $4); SetParent( s, $4 );
-											MakeScalarParam($$, array, $1, s); SetParent( $$, s ); 
-										}
-	| identifier '=' '[' comment_opt '{' param_list '}' flags_opt ']' { 
-											ParamDef *s;
-
-											MakeScalarParam(s, struct, NULL, $6); SetParent( s, $6 );
-											s->comment = $4;
-											s->flags = $8;
-											MakeScalarParam($$, array, $1, s); SetParent( $$, s ); 
-
-											PropagateStructFlags(s, $8);
-										}
+	identifier '=' value	{
+								$$ = makeScalarParam($1, &$3);
+								if ($3.type == structType)
+									SetParent($$, $3.value.structval);
+								else if ($3.type == arrayType)
+									SetParent($$, $3.value.arrayval);
+							}
 	;
 
 %%
@@ -187,6 +230,51 @@ static int
 prscfl_yyerror(prscfl_yyscan_t yyscanner, const char *msg) {
     fprintf(stderr, "gram_yyerror: %s at line %d\n", msg, prscflGetLineNo(yyscanner));
 	return 0;
+}
+
+static ParamDef *makeScalarParam(char *name, ValueDef *value)
+{
+	ParamDef *p = malloc(sizeof(*p));
+
+	*p = (ParamDef) {
+		.value = *value,
+		.name = name
+	};
+
+	return p;
+}
+
+static bool
+prscflParamDefEq(const ParamDef *p1, const ParamDef *p2)
+{
+	if (p1->value.type != p2->value.type)
+		return false;
+
+	switch (p1->value.type) {
+		case structType:
+			p1 = p1->value.value.structval;
+			p2 = p2->value.value.structval;
+
+			while (p1 != NULL && p2 != NULL) {
+				if (strcmp(p1->name, p2->name) != 0 ||
+					prscflParamDefEq(p1, p2) == false)
+					return false;
+
+				p1 = p1->next;
+				p2 = p2->next;
+			}
+
+			if (p1 != NULL || p2 != NULL)
+				return false;
+
+			break;
+		case arrayType:
+			return prscflParamDefEq(p1->value.value.arrayval, p2->value.value.arrayval);
+		default:
+			break;
+	}
+
+	return true;
 }
 
 ParamDef*

@@ -8,7 +8,7 @@ void
 printPrefix(FILE *fh, int level) {
 	int i;
 
-	for(i=0; i < level*4; i++)
+	for(i=0; i < level * 4; i++)
 		fputc(' ', fh);
 }
 
@@ -16,20 +16,19 @@ static void
 dumpComment(FILE *fh, int level, ParamDef *def) {
 	if (def->comment) {
 		ParamDef	*i = def->comment;
-	
-		fputc('\n', fh);
+
 		while(i) {
 			printPrefix(fh, level);
-			fprintf(fh, "# %s\n", i->paramValue.commentval);
+			fprintf(fh, "# %s\n", i->value.value.commentval);
 			i = i->next;
 		}
 	}
 }
 
 static void
-dumpParamDef(FILE *fh, int level, ParamDef *def) {
+dumpParamDef(FILE *fh, int level, ParamDef *def, bool inner) {
 	while(def) {
-		if (def->paramType == builtinType) {
+		if (def->value.type == builtinType) {
 			def = def->next;
 			continue;
 		}
@@ -37,27 +36,28 @@ dumpParamDef(FILE *fh, int level, ParamDef *def) {
 		dumpComment(fh, level, def);
 
 		printPrefix(fh, level);
-		fprintf(fh, "%s = ", def->name);
-	
-		switch(def->paramType) {
+		if (!def->parent || def->parent->value.type != arrayType)
+			fprintf(fh, "%s = ", def->name);
+
+		switch(def->value.type) {
 			case	int32Type:
-				fprintf(fh, "%"PRId32, def->paramValue.int32val);
+				fprintf(fh, "%"PRId32, def->value.value.int32val);
 				break;
 			case	uint32Type:
-				fprintf(fh, "%"PRIu32, def->paramValue.int32val);
+				fprintf(fh, "%"PRIu32, def->value.value.int32val);
 				break;
 			case	int64Type:
-				fprintf(fh, "%"PRId64, def->paramValue.int64val);
+				fprintf(fh, "%"PRId64, def->value.value.int64val);
 				break;
 			case	uint64Type:
-				fprintf(fh, "%"PRIu64, def->paramValue.uint64val);
+				fprintf(fh, "%"PRIu64, def->value.value.uint64val);
 				break;
 			case	doubleType:
-				fprintf(fh, "%g", def->paramValue.doubleval);
+				fprintf(fh, "%g", def->value.value.doubleval);
 				break;
 			case	stringType:
-				if ( def->paramValue.stringval) {
-					char *ptr = def->paramValue.stringval;
+				if ( def->value.value.stringval) {
+					char *ptr = def->value.value.stringval;
 					fputc('\"', fh);
 
 					while(*ptr) {
@@ -66,37 +66,32 @@ dumpParamDef(FILE *fh, int level, ParamDef *def) {
 						fputc(*ptr, fh);
 						ptr++;
 					}
-	
+
 					fputc('\"', fh);
 				} else {
 					fputs("NULL", fh);
 				}
 				break;
 			case	boolType:
-				fprintf(fh, "%s", def->paramValue.boolval ? "true" : "false");
+				fprintf(fh, "%s", def->value.value.boolval ? "true" : "false");
 				break;
 			case	commentType:
-				fprintf(stderr, "Unexpected comment"); 
+				fprintf(stderr, "Unexpected comment");
 				break;
 			case	structType:
 				fputs("{\n", fh);
-				dumpParamDef(fh, level+1, def->paramValue.structval);
+				dumpParamDef(fh, level + 1, def->value.value.structval, inner);
 				printPrefix(fh, level);
 				fputs("}", fh);
 				break;
 			case	arrayType:
-				fputs("[", fh);
-				dumpComment(fh, level+1, def->paramValue.arrayval);
-				printPrefix(fh, level+1);
-				fputs("{\n", fh);
-				dumpParamDef(fh, level+2, def->paramValue.arrayval->paramValue.structval);
-				printPrefix(fh, level+1);
-				fputs("}\n", fh);
+				fputs("[\n", fh);
+				dumpParamDef(fh, level + 2, inner ? def->value.value.arrayval : def->value.value.arrayval->next, true);
 				printPrefix(fh, level);
 				fputs("]", fh);
 				break;
 			default:
-				fprintf(stderr,"Unknown paramType (%d)\n", def->paramType);
+				fprintf(stderr,"Unknown value.type (%d)\n", def->value.type);
 				exit(1);
 		}
 
@@ -106,18 +101,7 @@ dumpParamDef(FILE *fh, int level, ParamDef *def) {
 	}
 }
 
-void 
+void
 fDump(FILE *fh, ParamDef *def) {
-	ParamDef	root;
-
-	root.paramType = structType;
-	root.paramValue.structval = def;
-	root.name = NULL;
-	root.parent = NULL;
-	root.next = NULL;
-	def->parent = &root;
-
-	dumpParamDef(fh, 0, def);
-
-	def->parent = NULL;
+	dumpParamDef(fh, 0, def->value.value.structval, false);
 }

@@ -11,20 +11,20 @@
 #include <sys/types.h>
 
 static int prscfg_yyerror(prscfg_yyscan_t yyscanner, const char *msg);
+static NameAtom *makeAtom(char *name, int index);
+static void setAtom(OptDef *def, NameAtom *idx);
 extern int prscfg_yylex (YYSTYPE * yylval_param, prscfg_yyscan_t yyscanner);
 static NameAtom* prependName(NameAtom *prep, NameAtom *name);
 static void freeName(NameAtom *atom);
 static OptDef	*output;
 
-#define MakeAtom(r, n)				do {		\
-	(r) = malloc(sizeof(NameAtom));				\
+	
+#define MakeAtom(r, n, in)	do {				\
+	(r) = makeAtom(n, in);						\
 	if (!(r)) {									\
 		prscfg_yyerror(yyscanner, "No memory");	\
 		YYERROR;								\
 	}											\
-	(r)->name = (n);							\
-	(r)->index = -1;							\
-	(r)->next = NULL;							\
 } while(0)
 
 #define MakeScalarParam(r, t, n, v, p)	do {  	\
@@ -33,9 +33,9 @@ static OptDef	*output;
 		prscfg_yyerror(yyscanner, "No memory");	\
 		YYERROR;								\
 	}											\
-	(r)->paramType = t##Type;					\
+	(r)->value.type = t##Type;					\
 	(r)->optional = p;							\
-	(r)->paramValue.t##val = (v);				\
+	(r)->value.value.t##val = (v);				\
 	(r)->name = (n);							\
 	(r)->parent = NULL;							\
 	(r)->next = NULL;							\
@@ -63,14 +63,6 @@ static OptDef	*output;
     OptDef *i = (l);                      		\
 	while(i) {                              	\
 		i->parent = (p);                    	\
-		i = i->next;                        	\
-	}                                       	\
-} while(0)
-
-#define SetIndex(l, in) do {                	\
-    OptDef *i = (l);                      		\
-	while(i) {                              	\
-		i->name->index = (in);              	\
 		i = i->next;                        	\
 	}                                       	\
 } while(0)
@@ -105,11 +97,11 @@ static OptDef	*output;
 }
 
 %type	<node>		cfg section_list section named_section
-%type	<node>		param param_list struct_list value evalue
+%type	<node>		param param_list value evalue list_value value_list
 %type	<atom>		qname qelem elem name qualifier
 %type	<flag>		opt
 %type   <str>		comma_opt
-%token	<str>		OPT_P KEY_P INDEX_P NULL_P STRING_P
+%token	<str>		OPT_P KEY_P NUMBER_P NULL_P STRING_P
 
 %%
 
@@ -141,45 +133,48 @@ param
 	: opt qname '='			{ prscfgScannerStartValue(yyscanner); }
 	  value					{ prscfgScannerEndValue(yyscanner);
 	  						  $5->name = $2; $5->optional = $1; $$ = $5; }
-	| opt qelem '=' evalue	{ $4->name = $2; $4->optional = $1; $$ = $4; }
+	| opt qelem '=' value	{ $4->name = $2; $4->optional = $1; $$ = $4; }
 	;
 
 value
 	: NULL_P						{ MakeScalarParam($$, scalar, NULL, NULL, 0); free($1); }
+	| NUMBER_P						{ MakeScalarParam($$, scalar, NULL, $1, 0); }
 	| STRING_P						{ MakeScalarParam($$, scalar, NULL, $1, 0); }
-	| '[' ']'						{ MakeScalarParam($$, array, NULL, NULL, 0); }
-	| '[' struct_list comma_opt ']' { $$ = $2; }
 	| evalue						{ $$ = $1; }
+	| '[' ']'						{ MakeScalarParam($$, array, NULL, NULL, 0); }
+	| '[' value_list ']'			{
+										MakeScalarParam($$, array, NULL, $2, 0);
+										SetParent($$, $2);
+									}
+	;
+
+list_value:
+	value comma_opt					{ $$ = $1; }
+	;
+
+value_list:
+	list_value						{
+										NameAtom	*idx;
+
+										MakeAtom(idx, NULL, 0);
+										setAtom($1, idx);
+										$$ = $1;
+									}
+	| value_list list_value			{
+										NameAtom	*idx;
+
+										MakeAtom(idx, NULL, $1->name->index + 1);
+										setAtom($2, idx);
+										MakeList($$, $2, $1);
+									}
 	;
 
 evalue
-	: '{' param_list comma_opt '}'	{ MakeScalarParam($$, struct, NULL, $2, 0); SetParent( $$, $2 ); }
-	;
-
-struct_list
-	: '{' param_list comma_opt '}' {
-			OptDef		*str;
-			NameAtom	*idx;
-
-			MakeAtom(idx, NULL);
-			MakeScalarParam(str, struct, idx, $2, 0); 
-			SetParent( str, $2 );
-			SetIndex( str, 0 );
-			MakeScalarParam($$, array, NULL, str, 0);
-			SetParent( $$, str );
-		}
-	| struct_list comma_opt '{' param_list comma_opt '}' {
-			OptDef		*str;
-			NameAtom	*idx;
-
-			MakeAtom(idx, NULL);
-			MakeScalarParam(str, struct, idx, $4, 0);
-			SetParent(str, $4);
-			SetIndex(str, $1->paramValue.arrayval->name->index + 1);
-			MakeList($1->paramValue.arrayval, str, $1->paramValue.arrayval); 
-			SetParent($1, str);
-			$$ = $1;
-		}
+	: '{' '}'						{ MakeScalarParam($$, struct, NULL, NULL, 0); }
+	| '{' param_list comma_opt '}'	{
+										MakeScalarParam($$, struct, NULL, $2, 0);
+										SetParent($$, $2);
+									}
 	;
 
 qname
@@ -197,16 +192,27 @@ qualifier
 	;
 
 elem
-	: name '[' INDEX_P ']'	{
-			$$ = $1; 
-			$$->index = atoi($3);
-			/* XXX check !*/
+	: name '[' NUMBER_P ']'	{
+			NameAtom *val;
+			unsigned long long in;
+			char *endptr;
+
+			errno = 0;
+			in = strtoull($3, &endptr, 10);
+			if (*endptr != '\0' || errno != 0 || in > UINT32_MAX) {
+				free($3);
+				prscfg_yyerror(yyscanner, "bad index value");
+				YYERROR;
+			}
 			free($3);
+
+			MakeAtom(val, NULL, in);
+			ConcatList($$, $1, val);
 		}
 	;
 
 name
-	: KEY_P			{ MakeAtom($$, $1); }
+	: KEY_P			{ MakeAtom($$, $1, -1); }
 	;
 
 opt
@@ -225,6 +231,30 @@ static int
 prscfg_yyerror(prscfg_yyscan_t yyscanner, const char *msg) {
 	out_warning(CNF_SYNTAXERROR, "gram_yyerror: %s at line %d", msg, prscfgGetLineNo(yyscanner));
 	return 0;
+}
+
+static NameAtom *
+makeAtom(char *name, int index)
+{
+	NameAtom *idx = malloc(sizeof(*idx));
+
+	if (!idx)
+		return NULL;
+
+	idx->name = name;
+	idx->index = index;
+	idx->next = NULL;
+
+	return idx;
+}
+
+static void
+setAtom(OptDef *def, NameAtom *idx)
+{
+	while (def) {
+		def->name = idx;
+		def = def->next;
+	}
 }
 
 static NameAtom*
@@ -292,26 +322,16 @@ static int
 compileName(OptDef	*def) {
 	NameAtom	*beginPtr = NULL, *endPtr, *list;
 	OptDef	*c = def;
-	int		index = -1;
 
 	list = NULL;
 
 	while(c) {
-		if (c->name->name) {
-			beginPtr = cloneName(c->name, &endPtr);
-			if (!beginPtr)
-				return 1;
+		beginPtr = cloneName(c->name, &endPtr);
+		if (!beginPtr)
+			return 1;
 
-			if (index >= 0) {
-				endPtr->index = index;
-				index = -1;
-			}
-
-			endPtr->next = list;
-			list = beginPtr;
-		} else {
-			index = c->name->index;
-		}
+		endPtr->next = list;
+		list = beginPtr;
 
 		c = c->parent;
 	}
@@ -326,57 +346,40 @@ plainOptDef(OptDef *def, OptDef *list) {
 	OptDef	*ptr;
 
 	while(def) {
-		switch(def->paramType) {
+		switch(def->value.type) {
 			case scalarType:
-				ptr = malloc(sizeof(*ptr));
-				if (!ptr) {
-					out_warning(CNF_NOMEMORY, "No memory");
-					freeCfgDef(def);
-					freeCfgDef(list);
-					return NULL;
-				}
-				*ptr = *def;
-				if (compileName(ptr)) {
-					freeName(ptr->name);
-					free(ptr);
-					freeCfgDef(def);
-					freeCfgDef(list);
-					return NULL;
-				}
-				ptr->parent = NULL;
-				ptr->next = list;
-				list = ptr;
 				break;
 			case structType:
-				list = plainOptDef(def->paramValue.structval, list);
+				list = plainOptDef(def->value.value.structval, list);
+				def->value.value.structval = NULL;
 				break;
 			case arrayType:
-				if (def->paramValue.arrayval == NULL) {
-					ptr = malloc(sizeof(*ptr));
-					if (!ptr) {
-						out_warning(CNF_NOMEMORY, "No memory");
-						freeCfgDef(def);
-						freeCfgDef(list);
-						return NULL;
-					}
-					*ptr = *def;
-					if (compileName(ptr)) {
-						freeName(ptr->name);
-						free(ptr);
-						freeCfgDef(def);
-						freeCfgDef(list);
-						return NULL;
-					}
-					ptr->parent = NULL;
-					ptr->next = list;
-					list = ptr;
-				} else {
-					list = plainOptDef(def->paramValue.arrayval, list);
-				}
+				list = plainOptDef(def->value.value.arrayval, list);
+				def->value.value.arrayval = NULL;
 				break;
 			default:
-				out_warning(CNF_INTERNALERROR, "Unknown paramType: %d", def->paramType);
+				out_warning(CNF_INTERNALERROR, "Unknown value.type: %d", def->value.type);
 		}
+
+		ptr = malloc(sizeof(*ptr));
+		if (!ptr) {
+			out_warning(CNF_NOMEMORY, "No memory");
+			freeCfgDef(def);
+			freeCfgDef(list);
+			return NULL;
+		}
+		*ptr = *def;
+
+		if (compileName(ptr)) {
+			freeName(ptr->name);
+			free(ptr);
+			freeCfgDef(def);
+			freeCfgDef(list);
+			return NULL;
+		}
+		ptr->parent = NULL;
+		ptr->next = list;
+		list = ptr;
 
 		ptr = def->next;
 		freeName(def->name);
@@ -392,15 +395,15 @@ freeCfgDef(OptDef *def) {
 	OptDef	*ptr;
 
 	while(def) {
-		switch(def->paramType) {
+		switch(def->value.type) {
 			case scalarType:
-				free(def->paramValue.scalarval);
+				free(def->value.value.scalarval);
 				break;
 			case structType:
-				freeCfgDef(def->paramValue.structval);
+				freeCfgDef(def->value.value.structval);
 				break;
 			case arrayType:
-				freeCfgDef(def->paramValue.arrayval);
+				freeCfgDef(def->value.value.arrayval);
 				break;
 			default:
 				break;
@@ -427,8 +430,10 @@ parseCfgDef(FILE *fh, int *error) {
 
 	if (error)
 		*error = yyresult;
-	if (yyresult != 0) 
+	if (yyresult != 0) {
+		freeCfgDef(output);
 		return NULL;
+	}
 
 	return plainOptDef(output, NULL);
 }
@@ -447,10 +452,10 @@ parseCfgDefBuffer(char *buffer, int *error) {
 
 	if (error)
 		*error = yyresult;
-	if (yyresult != 0) 
+	if (yyresult != 0) {
+		freeCfgDef(output);
 		return NULL;
+	}
 
 	return plainOptDef(output, NULL);
 }
-
-

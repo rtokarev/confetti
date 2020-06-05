@@ -75,12 +75,29 @@ VALSEP			[\[\]{},=]
 			return KEY_P;
 		}
 
-<INITIAL>{DIGIT}+		{
+<INITIAL>[\-\+]?{DIGIT}+								|
+<INITIAL>{DIGIT}+U										|
+<INITIAL>[\-\+]?{DIGIT}+L								|
+<INITIAL>{DIGIT}+UL										|
+<INITIAL>[\-\+]?{DIGIT}+"."{DIGIT}+						|
+<INITIAL>[\-\+]?{DIGIT}+[eE][\+\-]?{DIGIT}+				|
+<INITIAL>[\-\+]?{DIGIT}+"."{DIGIT}+[eE][\+\-]?{DIGIT}+	{
 			yylval->str = strdupn(yytext, yyleng);
 			if (!yylval->str)
 				scan_yyerror("No memory", yyextra->lineno);	
-			return INDEX_P;
+			return NUMBER_P;
 		}
+
+<INITIAL>\"			{
+			/* Accept a quoted string. */
+			yyextra->total = 256;
+			yyextra->strbuf = malloc(yyextra->total);
+			if (!yyextra->strbuf)
+				scan_yyerror("No memory", yyextra->lineno);	
+			yyextra->length = 0;
+			BEGIN QUOTED;
+		}
+
 
 <INITIAL>{DEFSEP}		{ return *yytext; }
 

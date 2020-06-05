@@ -2,7 +2,7 @@ CC?=gcc
 AR=ar
 RANLIB=ranlib
 LD=ld
-BISON=bison -y -d 
+BISON=bison -y -d
 FLEX=flex
 
 ARFLAGS=rcv

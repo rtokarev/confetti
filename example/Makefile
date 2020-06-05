@@ -8,7 +8,7 @@ CFLAGS=-Wall -g -O0 -Werror -std=gnu99
 INCLUDE=-I.
 LIB=
 
-example_OBJS=example.o my_product_cfg.o prscfg.o 
+example_OBJS=example.o my_product_cfg.o prscfg.o
 
 example_buffer_OBJS=example_buffer.o my_product_cfg.o prscfg.o
 
@@ -29,19 +29,19 @@ example: $(example_OBJS)
 example_buffer: $(example_buffer_OBJS)
 	$(CC) -o $@ $(example_buffer_OBJS) $(LIB)
 
-$(NAME).cfg: $(CFG)
+$(NAME).cfg: $(CFG) $(CONFETTI)
 	$(CONFETTI) -i $< -n $(NAME) -f $@
 
-$(NAME)_cfg.c: $(CFG)
+$(NAME)_cfg.c: $(CFG) $(CONFETTI)
 	$(CONFETTI) -i $< -n $(NAME) -c $@
 
-$(NAME)_cfg.h: $(CFG)
+$(NAME)_cfg.h: $(CFG) $(CONFETTI)
 	$(CONFETTI) -i $< -n $(NAME) -h $@
 
-prscfg.c: $(CFG)
+prscfg.c: $(CFG) $(CONFETTI)
 	$(CONFETTI) -i $< -p $@
 
-prscfg.h: $(CFG)
+prscfg.h: $(CFG) $(CONFETTI)
 	$(CONFETTI) -i $< -H $@
 
 prscfg.c: prscfg.h $(NAME)_cfg.h

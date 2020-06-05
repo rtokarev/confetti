@@ -1,70 +1,37 @@
-==========Accepted: 30; Skipped: 0; Optional: 0===========
+==========Accepted: 26; Skipped: 0; Optional: 0===========
 foo => '1234'
 bar => '-54321'
 asdf.k1 => 'as"d'
 asdf.k2 => (null)
-asdf.array[0].qwerty => '123.9'
-asdf.array[0].qwer1 => '123'
-asdf.array[0].substruct.sss => 'asdf.array.substruct.sss'
-asdf.array[0].subarray[0].subkey => '12'
-asdf.array[0].subarray[0].subke12 => '7654'
 asdf.k3 => (null)
-root_array[0].ra => '-1.344e-08'
-test[0].e => '1'
-empty[0].wow => (null)
 ro_struct.f1 => '1'
 ro_struct.f2 => '2'
-array_of_ro_structs[0].f1 => '1'
-array_of_ro_structs[0].f2 => '2'
 required_struct_with_structs.f1 => '1'
 required_struct_with_structs.f2 => '2'
 required_struct_with_structs.s1.f1 => '1'
 required_struct_with_structs.s1.f2 => '2'
 required_struct_with_structs.s1.ss1.f1 => '1'
 required_struct_with_structs.s1.ss1.f2 => '2'
-array_with_required_structs_with_structs[0].f1 => '1'
-array_with_required_structs_with_structs[0].f2 => '2'
-array_with_required_structs_with_structs[0].s.f1 => '1'
-array_with_required_structs_with_structs[0].s.f2 => '2'
-array_with_required_structs_with_structs[0].s.f3 => 'false'
 flsb => 'false'
 flst => 'true'
 ==========Check===========
 Option 'foo' is not set (or has a default value)
 Option 'asdf.k2' is not set (or has a default value)
-Option 'asdf.array[0].substruct.sss' is not set (or has a default value)
-Option 'asdf.array[0].subarray[0].subke12' is not set (or has a default value)
-Option 'root_array[0].ra' is not set (or has a default value)
-Missed required: 5
+Missed required: 2
 ==========Dup=============
 foo => '1234'
 bar => '-54321'
 asdf.k1 => 'as"d'
 asdf.k2 => (null)
-asdf.array[0].qwerty => '123.9'
-asdf.array[0].qwer1 => '123'
-asdf.array[0].substruct.sss => 'asdf.array.substruct.sss'
-asdf.array[0].subarray[0].subkey => '12'
-asdf.array[0].subarray[0].subke12 => '7654'
 asdf.k3 => (null)
-root_array[0].ra => '-1.344e-08'
-test[0].e => '1'
-empty[0].wow => (null)
 ro_struct.f1 => '1'
 ro_struct.f2 => '2'
-array_of_ro_structs[0].f1 => '1'
-array_of_ro_structs[0].f2 => '2'
 required_struct_with_structs.f1 => '1'
 required_struct_with_structs.f2 => '2'
 required_struct_with_structs.s1.f1 => '1'
 required_struct_with_structs.s1.f2 => '2'
 required_struct_with_structs.s1.ss1.f1 => '1'
 required_struct_with_structs.s1.ss1.f2 => '2'
-array_with_required_structs_with_structs[0].f1 => '1'
-array_with_required_structs_with_structs[0].f2 => '2'
-array_with_required_structs_with_structs[0].s.f1 => '1'
-array_with_required_structs_with_structs[0].s.f2 => '2'
-array_with_required_structs_with_structs[0].s.f3 => 'false'
 flsb => 'false'
 flst => 'true'
 ==========Compare=========

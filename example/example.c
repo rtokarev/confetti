@@ -23,15 +23,16 @@ main(int argc, char* argv[]) {
 	my_product_iterator_t	*i;
 	char		*key, *value;
 
-	fill_default_my_product(&cfg);
+	init_my_product(&cfg);
+	fill_default_my_product(&cfg, CNF_FLAG_STRUCT_NOTSET);
 
 	if (argc > 1) {
-		cfg.array_of_ro_structs = malloc((1 + 1) * sizeof(cfg.array_of_ro_structs));
-		cfg.array_of_ro_structs[0] = malloc(sizeof(**cfg.array_of_ro_structs));
-		cfg.array_of_ro_structs[0]->__confetti_flags = 0;
-		cfg.array_of_ro_structs[0]->f1 = 1;
-		cfg.array_of_ro_structs[0]->f2 = 2;
-		cfg.array_of_ro_structs[1] = NULL;
+		cfg.array_of_ro_structs.val = malloc(1 * sizeof(cfg.array_of_ro_structs));
+		cfg.array_of_ro_structs.n = 1;
+		cfg.array_of_ro_structs.__confetti_flags = 0;
+		cfg.array_of_ro_structs.val[0].__confetti_flags = 0;
+		cfg.array_of_ro_structs.val[0].f1 = 1;
+		cfg.array_of_ro_structs.val[0].f2 = 2;
 	}
 
 	if (argc > 1) {
@@ -65,17 +66,14 @@ main(int argc, char* argv[]) {
 	useStdout = 1;
 	printf("Missed required: %d\n", check_cfg_my_product(&cfg));
 
-	typeof(cfg.root_array) root_array = cfg.root_array;
-	unsigned k = 0;
-	while (root_array && *root_array) {
-		if (!CNF_STRUCT_DEFINED(*root_array))
+	unsigned k;
+	for (k = 0; k < cfg.root_array.n; k++) {
+		if (!CNF_STRUCT_DEFINED(&cfg.root_array.val[k]))
 			printf("root_array[%u] is not defined\n", k);
-
-		++k;
-		++root_array;
 	}
 
 	printf("==========Dup=============\n");
+	init_my_product(&dup_cfg);
 	dup_my_product(&dup_cfg, &cfg);
 	i = my_product_iterator_init();
 	while ( (key = my_product_iterator_next(i, &dup_cfg, &value)) != NULL ) {

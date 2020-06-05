@@ -82,7 +82,7 @@ DIGIT			[0-9]
 
 <INITIAL>[\=\[\]\{\}\,] { return *yytext; }
 
-<INITIAL>\%\{			{ 
+<INITIAL>\%\{\n			{ 
 			yyextra->total = 256;
 			yyextra->strbuf = malloc(yyextra->total);
 			yyextra->length = 0;
@@ -235,6 +235,8 @@ prscflScannerFinish(prscfl_yyscan_t scanner) {
 	if (buf)
 		yy_delete_buffer( buf, scanner );
 	buf = NULL;
+
+	yylex_destroy( scanner );
 }
 
 /*

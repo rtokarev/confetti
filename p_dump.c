@@ -22,17 +22,19 @@ static char* parserSource[] =	{
 	NULL
 };
 
-static char* headerSource[] =	{ 
+static char* headerSource[] =	{
 #include "header_source.c"
 	NULL
 };
 
-void 
+void
 pDump(FILE *fh, ParamDef *def) {
 	char **source = parserSource;
 
-	if (def->paramType == builtinType)
-		fputs(def->paramValue.stringval, fh);
+	for (def = def->value.value.structval; def != NULL; def = def->next) {
+		if (def->value.type == builtinType)
+			fprintf(fh, "%s\n", def->value.value.stringval);
+	}
 
 	while(*source) {
 		fputs(*source, fh);
@@ -40,7 +42,7 @@ pDump(FILE *fh, ParamDef *def) {
 	}
 }
 
-void 
+void
 HDump(FILE *fh) {
 	char **source = headerSource;
 

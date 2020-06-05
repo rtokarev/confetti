@@ -15,10 +15,11 @@ flsb => 'false'
 flst => 'true'
 ==========Check===========
 Option 'foo' is not set (or has a default value)
-Option 'root_array' is not set (or has a default value)
-Option 'empty' is not set (or has a default value)
+Option 'asdf.k2' is not set (or has a default value)
+Option 'root_array' is not set
+Option 'empty' is not set
 Option 'required_struct_with_structs' is not set
-Missed required: 4
+Missed required: 5
 ==========Dup=============
 foo => '1234'
 bar => '-54321'

@@ -27,7 +27,6 @@ asdf= {
 			subkey = 12
 			subke12 = 7654UL, required
 		], ro
-
 	]
 
 	k3 = NULL
