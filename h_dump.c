@@ -189,7 +189,7 @@ hDump(FILE *fh, ParamDef *root) {
 	);
 
 	fprintf(fh, "void init_%s(%s *c);\n\n", root->name, root->name);
-	fprintf(fh, "int fill_default_%s(%s *c, unsigned char flags);\n\n", root->name, root->name);
+	fprintf(fh, "ConfettyError fill_default_%s(%s *c);\n\n", root->name, root->name);
 	fprintf(fh, "void swap_%s(struct %s *c1, struct %s *c2);\n\n",
 		root->name, root->name, root->name);
 	fprintf(fh, "void destroy_%s(%s *c);\n\n", root->name, root->name);

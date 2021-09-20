@@ -42,6 +42,8 @@ typedef struct ValueDef {
 		builtinType = 11
 	} type;
 
+	int flags;
+
 	union {
 		int32_t			int32val;
 		int64_t			int64val;
@@ -57,8 +59,12 @@ typedef struct ValueDef {
 	} value;
 } ValueDef;
 
-typedef struct ParamDef {
+typedef struct ParamDef ParamDef;
+
+struct ParamDef {
 	char			*name;
+
+	ParamDef		*def;
 	ValueDef		value;
 
 	int				flags;
@@ -66,7 +72,7 @@ typedef struct ParamDef {
 	struct ParamDef	*comment;
 	struct ParamDef	*parent;
 	struct ParamDef	*next;
-} ParamDef;
+};
 
 #define PARAMDEF_RDONLY			(0x01)
 #define PARAMDEF_REQUIRED		(0x02)

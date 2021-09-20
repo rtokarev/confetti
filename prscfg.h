@@ -30,6 +30,7 @@ typedef struct OptDef {
 	OptValue		value;
 
 	struct OptDef	*parent;
+	struct OptDef	*child;
 	struct OptDef	*next;
 } OptDef;
 

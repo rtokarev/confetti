@@ -342,19 +342,22 @@ compileName(OptDef	*def) {
 }
 
 static OptDef*
-plainOptDef(OptDef *def, OptDef *list) {
+plainOptDef(OptDef *def) {
 	OptDef	*ptr;
+	OptDef	*list = NULL;
 
 	while(def) {
+		OptDef	*child_list = NULL;
+
 		switch(def->value.type) {
 			case scalarType:
 				break;
 			case structType:
-				list = plainOptDef(def->value.value.structval, list);
+				child_list = plainOptDef(def->value.value.structval);
 				def->value.value.structval = NULL;
 				break;
 			case arrayType:
-				list = plainOptDef(def->value.value.arrayval, list);
+				child_list = plainOptDef(def->value.value.arrayval);
 				def->value.value.arrayval = NULL;
 				break;
 			default:
@@ -378,6 +381,7 @@ plainOptDef(OptDef *def, OptDef *list) {
 			return NULL;
 		}
 		ptr->parent = NULL;
+		ptr->child = child_list;
 		ptr->next = list;
 		list = ptr;
 
@@ -409,6 +413,8 @@ freeCfgDef(OptDef *def) {
 				break;
 		}
 
+		freeCfgDef(def->child);
+
 		ptr = def->next;
 		freeName(def->name);
 		free(def);
@@ -435,7 +441,7 @@ parseCfgDef(FILE *fh, int *error) {
 		return NULL;
 	}
 
-	return plainOptDef(output, NULL);
+	return plainOptDef(output);
 }
 
 OptDef*
@@ -457,5 +463,5 @@ parseCfgDefBuffer(char *buffer, int *error) {
 		return NULL;
 	}
 
-	return plainOptDef(output, NULL);
+	return plainOptDef(output);
 }

@@ -22,14 +22,14 @@ main(int argc __attribute__ ((unused)), char* argv[] __attribute__ ((unused))) {
 	char		*key, *value;
 	int			nAccepted, nSkipped, nOptional;
 
-	fill_default_my_product(&cfg);
+	fill_default_my_product(&cfg, CNF_FLAG_STRUCT_NOTSET);
 
 	parse_cfg_buffer_my_product(
 		&cfg,
 		"asdf.array[2].subarray[3].subkey = 123456789 "
 		"root_array[3].ra = 12 "
 		"asdf.k1=UNQUOTED-VALUE "
-		"asdf.k2=\"QUOTED VALUE\" " 
+		"asdf.k2=\"QUOTED VALUE\" "
 		"opt no_such_param = 123",
 		0, &nAccepted, &nSkipped, &nOptional
 	);

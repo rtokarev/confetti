@@ -11,9 +11,9 @@ struct (RW)	asdf
 			struct (RW)	substruct
 				char* (RW, REQ)	sss
 			array (RO)	subarray
-				struct (RW)	(null)
-					int32_t (RW)	subkey
-					u_int64_t (RW, REQ)	subke12
+				struct (RO)	(null)
+					int32_t (RO)	subkey
+					u_int64_t (RO, REQ)	subke12
 	char* (RW)	k3
 array (RW, REQ)	root_array
 	struct (RW)	(null)

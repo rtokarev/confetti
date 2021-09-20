@@ -7,55 +7,55 @@ void out_warning(ConfettyError r, char *format, ...);
 %}
 
 # foo value is responsible1
-foo=1234U, required
+required foo=1234U
 bar=-54321L
 asdf= {
 # asdfffffas asdd
 	k1 = "as\"d"
 # lkjhsdfiuher
 # =========================r
-	k2 = NULL, required
+	required k2 = NULL
 	# substruct
 	array = [
-		qwerty=123.9, ro
+		ro qwerty=123.9
 		qwer1=123
 		substruct = {
-			sss = "asdf.array.substruct.sss", required
+			required sss = "asdf.array.substruct.sss"
 
 		}
-		subarray = [
+		ro subarray = ro [ ro {
 			subkey = 12
-			subke12 = 7654UL, required
-		], ro
+			required subke12 = 7654UL
+		} ]
 	]
 
 	k3 = NULL
 }
 
-root_array = [
-	ra = -1.344e-08, required
-], required
+required root_array = [
+	required ra = -1.344e-08
+]
 
 test = [
 	#checl reqelem
-	{ e=1 }, required
+	required { e=1 }
 ]
 
-empty = [
+required empty = [
 	wow=NULL
-], required
+]
 
-ro_struct = {
+ro_struct = ro {
 	f1 = 1
 	f2 = 2
-}, ro
+}
 
-array_of_ro_structs = [ {
+array_of_ro_structs = [ ro {
 	f1 = 1
 	f2 = 2
-}, ro ]
+} ]
 
-required_struct_with_structs = {
+required required_struct_with_structs = {
 	f1 = 1
 	f2 = 2
 	s1 = {
@@ -66,10 +66,10 @@ required_struct_with_structs = {
 			f2 = 2
 		}
 	}
-}, required
+}
 
 array_with_required_structs_with_structs = [
-	{
+	required {
 		f1 = 1
 		f2 = 2
 		s = {
@@ -77,7 +77,7 @@ array_with_required_structs_with_structs = [
 			f2 = 2
 			f3 = false
 		}
-	}, required
+	}
 ]
 
 flsb = false

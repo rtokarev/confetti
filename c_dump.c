@@ -140,7 +140,7 @@ dumpStructFullPath(FILE *fh, char *name, char *itername, ParamDef *def, int isit
 }
 
 static uint32_t
-arrayLen(ParamDef *def, bool template)
+arrayLen(ParamDef *def)
 {
 	uint32_t len = 0;
 
@@ -148,9 +148,6 @@ arrayLen(ParamDef *def, bool template)
 		len++;
 		def = def->next;
 	}
-
-	if (template)
-		len--;
 
 	return len;
 }
@@ -164,7 +161,7 @@ dumpStructPath(FILE *fh, ParamDef *def, char *name) {
 }
 
 static void
-dumpDefault(FILE *fh, int level, ParamDef *def, bool template) {
+dumpDefault(FILE *fh, int level, ParamDef *def, bool accept, int depth) {
 	while(def) {
 		switch (def->value.type) {
 			case structType:
@@ -217,19 +214,36 @@ dumpDefault(FILE *fh, int level, ParamDef *def, bool template) {
 					    def->flags & PARAMDEF_REQUIRED ? "-1" : def->value.value.boolval ? "true" : "false");
 				break;
 			case	structType:
-				if (def->parent) {
-					fputts(fh, level, "if ((r = fill_default_");
-					dumpStructName(fh, def, "_");
+				if (!def->parent)
+					dumpDefault(fh, level, def->value.value.structval, accept, depth);
+				else {
 					if (def->name) {
-						fprintf(fh, "(&c->%s, flags)) != CNF_OK)\n", def->name);
-					} else
-						fprintf(fh, "(c, flags)) != CNF_OK)\n");
-					fputts(fh, level, "\treturn r;\n");
-				} else
-					dumpDefault(fh, level, def->value.value.structval, template);
+						fputts(fh, level, "{\n");
+						level++;
+
+						fputt(fh, level);
+						dumpParamType(fh, def);
+						fprintf(fh, " *cc = &c->%s;\n", def->name);
+						fputt(fh, level);
+						dumpParamType(fh, def);
+						fputs(" *c = cc;\n\n", fh);
+					}
+
+					if (!accept)
+						fputts(fh, level, "c->__confetti_flags = 0;\n");
+					else
+						fputts(fh, level, "c->__confetti_flags = flags;\n");
+
+					dumpDefault(fh, level, def->value.value.structval, accept, depth);
+
+					if (def->name) {
+						level--;
+						fputts(fh, level, "}\n");
+					}
+				}
 				break;
 			case	arrayType: {
-				uint32_t n = arrayLen(def->value.value.arrayval, template);
+				uint32_t n = arrayLen(def->value.value.arrayval);
 				const char *name_fmt, *name;
 
 				if (def->parent && def->parent->value.type == arrayType) {
@@ -242,7 +256,11 @@ dumpDefault(FILE *fh, int level, ParamDef *def, bool template) {
 
 				fputt(fh, level);
 				fprintf(fh, name_fmt, name);
-				fputs("__confetti_flags = flags;\n", fh);
+				if (!accept)
+					fputs("__confetti_flags = 0;\n", fh);
+				else
+					fputs("__confetti_flags = flags;\n", fh);
+
 				if (n == 0) {
 					fputt(fh, level);
 					fprintf(fh, name_fmt, name);
@@ -275,11 +293,7 @@ dumpDefault(FILE *fh, int level, ParamDef *def, bool template) {
 				dumpParamType(fh, def->value.value.arrayval);
 				fputs(" *c = cc;\n\n", fh);
 
-				if (template)
-					// the first array value is a template
-					dumpDefault(fh, level + 1, def->value.value.arrayval->next, false);
-				else
-					dumpDefault(fh, level + 1, def->value.value.arrayval, true);
+				dumpDefault(fh, level + 1, def->value.value.arrayval, accept, depth + 1);
 
 				fputts(fh, level, "}\n");
 				break;
@@ -294,8 +308,12 @@ dumpDefault(FILE *fh, int level, ParamDef *def, bool template) {
 				exit(1);
 		}
 
-		if (def->parent && def->parent->value.type == arrayType)
-				fputts(fh, level, "c++;\n");
+		if (def->parent && def->parent->value.type == arrayType) {
+			if (accept && !depth)
+				break;
+
+			fputts(fh, level, "c++;\n");
+		}
 
 		def = def->next;
 	}
@@ -319,96 +337,38 @@ childDef(ParamDef *def)
 }
 
 static void
-makeDefault(FILE *fh, ParamDef *def)
-{
-	ParamDef *child = childDef(def);
-
-	while(child) {
-		switch(child->value.type) {
-			case	int32Type:
-			case	uint32Type:
-			case	int64Type:
-			case	uint64Type:
-			case	doubleType:
-			case	boolType:
-			case	commentType:
-			case	stringType:
-				break;
-			case	arrayType:
-			case	structType:
-				makeDefault(fh, child);
-				break;
-			case	builtinType:
-				break;
-			default:
-				fprintf(stderr,"Unknown value.type (%d)\n", def->value.type);
-				exit(1);
-		}
-
-		if (def->value.type == arrayType)
-			return;
-
-		child = child->next;
-	}
-
-	if (def->parent != NULL)
-		fputs("static ", fh);
-	fputs(
-		"int\n"
-		"fill_default_",
-		fh);
-	dumpStructName(fh, def, "_");
-	fputs("(", fh);
-	dumpParamType(fh, def);
-	fputs("* c, unsigned char flags) {\n"
-		"\tint r = CNF_OK;\n\n"
-		"\tc->__confetti_flags = flags;\n\n",
-		fh);
-
-	dumpDefault(fh, 1, childDef(def), true);
-
-	fputs(
-		"\n\treturn r;\n"
-		"}\n\n",
-		fh);
-}
-
-static void
 dumpAcceptDefault(FILE *fh, ParamDef *def) {
 	while (def) {
 		switch(def->value.type) {
-			case	structType:
-				dumpAcceptDefault(fh, def->value.value.structval);
+			case	builtinType:
 				break;
-			case	arrayType: {
-				ParamDef *tmp;
-
-				dumpAcceptDefault(fh, def->value.value.arrayval);
+			case	structType:
+			case	arrayType:
+				dumpAcceptDefault(fh, childDef(def));
+			default:
+				if (def->value.type != structType && def->parent->value.type != arrayType)
+					break;
 
 				fputs(
 				    "static int\n"
 					"acceptDefault_",
 					fh);
-				dumpParamDefCName(fh, def->value.value.arrayval);
+				dumpParamDefCName(fh, def);
 				fputs("(", fh);
-				dumpParamType(fh, def->value.value.arrayval);
+				dumpParamType(fh, def);
 				fputs(" *c, unsigned char flags) {\n"
 					"\tint r = CNF_OK;\n\n",
 					fh);
 
-				tmp = def->value.value.arrayval->next;
-				def->value.value.arrayval->next = NULL;
-				dumpDefault(fh, 1, def->value.value.arrayval, true);
-				def->value.value.arrayval->next = tmp;
+				if (def->value.type == structType) {
+					fputs("\tc->__confetti_flags = flags;\n", fh);
+					dumpDefault(fh, 1, def->value.value.structval, true, 0);
+				} else
+					dumpDefault(fh, 1, def, true, 0);
 
 				fputs("\n\treturn r;\n"
 					"}\n\n",
 					fh);
-
-				break;
-			}
-			default:
-				break;
 		}
 
 		if (def->parent && def->parent->value.type == arrayType)
@@ -431,8 +391,23 @@ arrangeArray(FILE *fh, ParamDef *def) {
 	else
 		fputs("->__confetti_flags &= ~CNF_FLAG_STRUCT_NOTSET;\n", fh);
 
+	if (def->value.type != structType && def->value.type != arrayType)
+		return;
+
+	fputs("\t\tif (", fh);
+	dumpStructFullPath(fh, "c", "i", def, 0, 1);
+	fputs(".__confetti_flags & CNF_FLAG_STRUCT_NEW)\n", fh);
+	fputs("\t\t\tcheck_rdonly = 0;\n", fh);
+
 	if (def->value.type == arrayType) {
 		int	n;
+
+		if (def->value.value.arrayval->value.type != structType &&
+		    def->value.value.arrayval->value.type != arrayType) {
+			fputs("\t\told_n = ", fh);
+			dumpStructFullPath(fh, "c", "i", def, 0, 1);
+			fputs(".n;\n", fh);
+		}
 
 		fputs("\t\tARRAYALLOC(", fh);
 		n = dumpStructFullPath(fh, "c", "i", def, 0, 1);
@@ -440,16 +415,22 @@ arrangeArray(FILE *fh, ParamDef *def) {
 		dumpArrayIndex(fh, n);
 		fputs(" + 1, ", fh);
 		dumpParamDefCName(fh, def->value.value.arrayval);
-		if (def->flags & PARAMDEF_RDONLY)
+		if (def->value.flags & PARAMDEF_RDONLY)
 			fputs(", check_rdonly, 1, CNF_FLAG_STRUCT_NEW | CNF_FLAG_STRUCT_NOTSET);\n", fh);
 		else
 			fputs(", 0, 1, CNF_FLAG_STRUCT_NEW | CNF_FLAG_STRUCT_NOTSET);\n", fh);
-		if (def->value.value.arrayval->value.type == structType) {
+		if (def->value.value.arrayval->value.type == structType ||
+		    def->value.value.arrayval->value.type == arrayType) {
 			fputs("\t\tif (", fh);
 			dumpStructFullPath(fh, "c", "i", def, 0, 1);
 			fputs(".val[", fh);
 			dumpArrayIndex(fh, n);
 			fputs("].__confetti_flags & CNF_FLAG_STRUCT_NEW)\n", fh);
+			fputs("\t\t\tcheck_rdonly = 0;\n", fh);
+		} else {
+			fputs("\t\tif (", fh);
+			dumpArrayIndex(fh, n);
+			fputs(" >= old_n)\n", fh);
 			fputs("\t\t\tcheck_rdonly = 0;\n", fh);
 		}
 	}
@@ -457,15 +438,8 @@ arrangeArray(FILE *fh, ParamDef *def) {
 
 static void
 printIf(FILE *fh, ParamDef *def, int i) {
-	if (i > 1)
-		fputs("\telse ", fh);
-	else
-		fputs("\t", fh);
+	const char *type_str;
 
-	fputs("if (cmpNameAtoms(opt->name, ", fh);
-	dumpParamDefCName(fh, def);
-	fputs(")) {\n", fh);
-	fputs("\t\tif (opt->value.type != ", fh);
 	switch(def->value.type) {
 		case	int32Type:
 		case	uint32Type:
@@ -474,24 +448,43 @@ printIf(FILE *fh, ParamDef *def, int i) {
 		case	doubleType:
 		case	stringType:
 		case	boolType:
-			fputs("scalarType", fh);
+			type_str = "scalarType";
 			break;
 		case	structType:
-			fputs("structType", fh);
+			type_str = "structType";
 			break;
 		case	arrayType:
-			fputs("arrayType", fh);
+			type_str = "arrayType";
 			break;
 		default:
 			fprintf(stderr,"Unexpected def type: %d", def->value.type);
-			break;
+			exit(1);
 	}
+
+	if (i > 1)
+		fputs("\telse ", fh);
+	else
+		fputs("\t", fh);
+
+	fputs("if (cmpNameAtoms(opt->name, ", fh);
+	dumpParamDefCName(fh, def);
+	fputs(")) {\n", fh);
+	if (type_str == (void *)"scalarType")
+		fputs("\t\tint old_n;\n"
+			"\t\t(void)old_n;\n\n",
+			fh);
+	fprintf(fh, "\t\tif (opt->value.type != %s", type_str);
 	fputs(" )\n\t\t\treturn CNF_WRONGTYPE;\n", fh);
 
 	if (def->value.type == structType ||
 	    def->value.type == arrayType) {
 		int n;
 		int level = 2;
+
+		if (def->flags & PARAMDEF_RDONLY) {
+			fputts(fh, level, "if (!check_rdonly) {\n");
+			level++;
+		}
 
 		if (def->parent->value.type == arrayType) {
 			fputts(fh, level, "if (");
@@ -501,28 +494,42 @@ printIf(FILE *fh, ParamDef *def, int i) {
 			fputs(") {\n", fh);
 			level++;
 		}
-			fputts(fh, level, "destroy_");
-			dumpStructName(fh, def, "_");
+
+		fputts(fh, level, "if (!(");
+		dumpStructFullPath(fh, "c", "i", def, 0, 1);
+		fputs(".__confetti_flags & CNF_FLAG_STRUCT_NEW)) {\n", fh);
+
+		fputts(fh, level, "\tdestroy_");
+		dumpStructName(fh, def, "_");
+		fputs("(&", fh);
+		dumpStructFullPath(fh, "c", "i", def, 0, 1);
+		fputs(");\n", fh);
+
+		if (def->value.type == structType) {
+			fputts(fh, level, "\tint r = acceptDefault_");
+            dumpParamDefCName(fh, def);
 			fputs("(&", fh);
 			dumpStructFullPath(fh, "c", "i", def, 0, 1);
-			fputs(");\n", fh);
+			fputs(", CNF_FLAG_STRUCT_NEW);\n", fh);
+			fputts(fh, level, "\tif (r != CNF_OK)\n");
+			fputts(fh, level, "\t\treturn r;\n");
+		} else {
+			fputts(fh, level, "\t");
+			dumpStructFullPath(fh, "c", "i", def, 0, 1);
+			fputs(".__confetti_flags = CNF_FLAG_STRUCT_NEW;\n", fh);
+		}
 
-			if (def->value.type == structType) {
-				fputts(fh, level, "int r = fill_default_");
-				dumpStructName(fh, def, "_");
-				fputs("(&", fh);
-				dumpStructFullPath(fh, "c", "i", def, 0, 1);
-				fputs(", CNF_FLAG_STRUCT_NEW);\n", fh);
-				fputts(fh, level, "if (r != CNF_OK)\n");
-				fputts(fh, level, "\treturn r;\n");
-			} else {
-				fputt(fh, level);
-				dumpStructFullPath(fh, "c", "i", def, 0, 1);
-				fputs(".__confetti_flags = CNF_FLAG_STRUCT_NEW;\n", fh);
-			}
+		fputts(fh, level, "}\n");
+
 		if (def->parent->value.type == arrayType) {
 			level--;
 			fputts(fh, level, "}\n");
+		}
+
+		if (def->flags & PARAMDEF_RDONLY) {
+			level--;
+			fputts(fh, level, "} else\n");
+			fputts(fh, level, "\treturn CNF_RDONLY;\n");
 		}
 	}
 
@@ -1685,7 +1692,18 @@ cDump(FILE *fh, ParamDef *def) {
 		"}\n\n",
 		name, name);
 
-	makeDefault(fh, def);
+	fprintf(fh,
+		"ConfettyError\n"
+		"fill_default_%s(%s *c) {\n"
+		"\tc->__confetti_flags = 0;\n\n",
+		name, name);
+
+	dumpDefault(fh, 1, def, false, 0);
+
+	fputs(
+		"\n\treturn CNF_OK;\n"
+		"}\n\n",
+		fh);
 
 	fprintf(fh,
 		"void\n"
@@ -1699,13 +1717,13 @@ cDump(FILE *fh, ParamDef *def) {
 		"}\n\n", name);
 
 	fputs("/************** Destroy config  **************/\n\n", fh);
-	makeDestroy(fh, def);
+	makeDestroy(fh, def->def);
 
 	fputs("/************** Parse config  **************/\n\n", fh);
 
-	dumpAcceptDefault(fh, def);
+	dumpAcceptDefault(fh, def->def->value.value.structval);
 
-	dumpParamDefCNameRecursive(fh, def->value.value.structval);
+	dumpParamDefCNameRecursive(fh, def->def->value.value.structval);
 
 	fputs(
 		"\n"
@@ -1739,7 +1757,7 @@ cDump(FILE *fh, ParamDef *def) {
 		"acceptValue(%s* c, OptDef* opt, int check_rdonly) {\n"
 		, name);
 
-	makeAccept(fh, def, 0);
+	makeAccept(fh, def->def, 0);
 
 	fputs(
 		"\telse {\n"
@@ -1751,7 +1769,7 @@ cDump(FILE *fh, ParamDef *def) {
 	);
 
 	fprintf(fh,
-		"static void cleanFlags(%s* c, OptDef* opt);\n\n"
+		"static void cleanFlags(%s* c);\n\n"
 		, name);
 
 	fputs(
@@ -1780,12 +1798,12 @@ cDump(FILE *fh, ParamDef *def) {
 		"static void\n"
 		"acceptCfgDef(%s *c, OptDef *opt, int check_rdonly, int *n_accepted, int *n_skipped, int *n_optional) {\n"
 		"\tConfettyError	r;\n"
-		"\tOptDef		*orig_opt = opt;\n\n"
 		"\twhile(opt) {\n"
 		"\t\tr = acceptValue(c, opt, check_rdonly);\n"
 		"\t\tswitch(r) {\n"
 		"\t\t\tcase CNF_OK:\n"
 		"\t\t\t\tif (n_accepted) (*n_accepted)++;\n"
+		"\t\t\t\tacceptCfgDef(c, opt->child, check_rdonly, n_accepted, n_skipped, n_optional);\n"
 		"\t\t\t\tbreak;\n"
 		"\t\t\tcase CNF_OPTIONAL:\n"
 		"\t\t\t\tout_warning(r, \"Option '%cs' is not supported\", dumpOptDef(opt->name));\n"
@@ -1830,8 +1848,6 @@ cDump(FILE *fh, ParamDef *def) {
 		"\t\t}\n\n"
 		"\t\topt = opt->next;\n"
 		"\t}\n"
-		"\n"
-		"\tcleanFlags(c, orig_opt);\n"
 		"}\n\n"
 		, name, '%', '%', '%', '%', '%', '%', '%', '%', '%', '%'
 	);
@@ -1847,6 +1863,7 @@ cDump(FILE *fh, ParamDef *def) {
 		"\tif (option == NULL)\n"
 		"\t\treturn error ? -1 : 0;\n"
 		"\tacceptCfgDef(c, option, check_rdonly, n_accepted, n_skipped, n_optional);\n"
+		"\tcleanFlags(c);\n"
 		"\tfreeCfgDef(option);\n"
 		"\treturn 0;\n"
 		"}\n\n"
@@ -1864,6 +1881,7 @@ cDump(FILE *fh, ParamDef *def) {
 		"\tif (option == NULL)\n"
 		"\t\treturn error ? -1 : 0;\n"
 		"\tacceptCfgDef(c, option, check_rdonly, n_accepted, n_skipped, n_optional);\n"
+		"\tcleanFlags(c);\n"
 		"\tfreeCfgDef(option);\n"
 		"\treturn 0;\n"
 		"}\n\n"
@@ -1875,14 +1893,14 @@ cDump(FILE *fh, ParamDef *def) {
 		"typedef enum IteratorState {\n"
 		"\t_S_Initial = 0,\n"
 		, fh );
-	makeIteratorStates(fh, def->value.value.structval);
+	makeIteratorStates(fh, def->def->value.value.structval);
 	fputs(
 		"\t_S_Finished\n"
 		"} IteratorState;\n\n"
 		, fh);
 
 	fprintf( fh, "struct %s_iterator_t {\n\tIteratorState\tstate;\n" , name);
-	makeArrayIndexes(fh, def->value.value.structval);
+	makeArrayIndexes(fh, def->def->value.value.structval);
 	fprintf( fh, "};\n\n");
 
 	fprintf(fh,
@@ -1902,7 +1920,7 @@ cDump(FILE *fh, ParamDef *def) {
 		"\tswitch(i->state) {\n"
 		"\t\tcase _S_Initial:\n"
 		, name, name, name, name, name, name);
-	makeSwitch(fh, def->value.value.structval, 2, NULL, NULL);
+	makeSwitch(fh, def->def->value.value.structval, 2, NULL, NULL);
 	fprintf(fh,
 		"\t\tcase _S_Finished:\n"
 		"\t\t\tfree(i);\n"
@@ -1919,21 +1937,18 @@ cDump(FILE *fh, ParamDef *def) {
 	fprintf( fh, "\t%s_iterator_t iterator, *i = &iterator;\n" , name);
 	fputs("\tint\tres = 0;\n\n", fh);
 
-	makeCheck(fh, def->value.value.structval, 1);
+	makeCheck(fh, def->def->value.value.structval, 1);
 
 	fputs("\treturn res;\n}\n\n",  fh);
 
 	fprintf(fh,
 		"static void\n"
-		"cleanFlags(%s* c, OptDef* opt) {\n"
+		"cleanFlags(%s* c) {\n"
 		, name);
 	fprintf(fh,
 		"\t%s_iterator_t iterator, *i = &iterator;\n\n", name);
-	makeCleanFlags(fh, def, 1);
-	fputs(
-		"\t(void)opt;\n"
-		"}\n\n",
-		fh
+	makeCleanFlags(fh, def->def, 1);
+	fputs("}\n\n", fh
 	);
 
 	fputs("/************** Duplicate config  **************/\n\n", fh);
@@ -1943,7 +1958,7 @@ cDump(FILE *fh, ParamDef *def) {
 		, name, name, name);
 	fprintf(fh,
 		"\t%s_iterator_t iterator, *i = &iterator;\n\n", name);
-	makeDup(fh, def, 1);
+	makeDup(fh, def->def, 1);
 	fputs("\n\treturn CNF_OK;\n", fh);
 	fputs("}\n\n", fh);
 
@@ -1968,7 +1983,7 @@ cDump(FILE *fh, ParamDef *def) {
 		"\t%s_iterator_t iterator1, iterator2, *i1 = &iterator1, *i2 = &iterator2;\n"
 		"\tstatic char diff[PRINTBUFLEN];\n\n",
 		name);
-	makeCmp(fh, def, 1);
+	makeCmp(fh, def->def, 1);
 	fputs("\n\treturn 0;\n", fh);
 	fputs("}\n\n", fh);
 }

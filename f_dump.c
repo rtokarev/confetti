@@ -14,19 +14,17 @@ printPrefix(FILE *fh, int level) {
 
 static void
 dumpComment(FILE *fh, int level, ParamDef *def) {
-	if (def->comment) {
-		ParamDef	*i = def->comment;
+	ParamDef	*i = def->comment;
 
-		while(i) {
-			printPrefix(fh, level);
-			fprintf(fh, "# %s\n", i->value.value.commentval);
-			i = i->next;
-		}
+	while(i) {
+		printPrefix(fh, level);
+		fprintf(fh, "# %s\n", i->value.value.commentval);
+		i = i->next;
 	}
 }
 
 static void
-dumpParamDef(FILE *fh, int level, ParamDef *def, bool inner) {
+dumpParamDef(FILE *fh, int level, ParamDef *def) {
 	while(def) {
 		if (def->value.type == builtinType) {
 			def = def->next;
@@ -80,13 +78,13 @@ dumpParamDef(FILE *fh, int level, ParamDef *def, bool inner) {
 				break;
 			case	structType:
 				fputs("{\n", fh);
-				dumpParamDef(fh, level + 1, def->value.value.structval, inner);
+				dumpParamDef(fh, level + 1, def->value.value.structval);
 				printPrefix(fh, level);
 				fputs("}", fh);
 				break;
 			case	arrayType:
 				fputs("[\n", fh);
-				dumpParamDef(fh, level + 2, inner ? def->value.value.arrayval : def->value.value.arrayval->next, true);
+				dumpParamDef(fh, level + 2, def->value.value.arrayval);
 				printPrefix(fh, level);
 				fputs("]", fh);
 				break;
@@ -103,5 +101,5 @@ dumpParamDef(FILE *fh, int level, ParamDef *def, bool inner) {
 
 void
 fDump(FILE *fh, ParamDef *def) {
-	dumpParamDef(fh, 0, def->value.value.structval, false);
+	dumpParamDef(fh, 0, def->value.value.structval);
 }

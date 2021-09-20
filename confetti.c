@@ -27,7 +27,7 @@ main(int argc, char* argv[]) {
 	FILE		*fh;
 	char		*name = NULL;
 	int			i, debug = 0;;
-	ParamDef	root, *def;
+	ParamDef	root, root_def, *def;
 
 	opterr=0;
 	while((i=getopt(argc,argv,"i:c:h:f:n:p:H:D")) != EOF) {
@@ -76,19 +76,37 @@ main(int argc, char* argv[]) {
 
 	fclose(fh);
 
-	root.value.type = structType;
-	root.value.value.structval = def;
-	root.name = name;
-	root.parent = NULL;
-	root.next = NULL;
+	root_def = (ParamDef) {
+		.name = name,
 
-	while (def) {
+		.value = {
+			.type = structType,
+			.value = {
+				.structval = def->def
+			}
+		}
+	};
+
+	root = (ParamDef) {
+		.name = name,
+
+		.def = &root_def,
+		.value = {
+			.type = structType,
+			.value = {
+				.structval = def
+			}
+		}
+	};
+
+	for (def = root_def.value.value.structval; def != NULL; def = def->next)
+		def->parent = &root_def;
+
+	for (def = root.value.value.structval; def != NULL; def = def->next)
 		def->parent = &root;
-		def = def->next;
-	}
 
 	if (debug)
-		dDump(&root);
+		dDump(&root_def);
 
 	if ( hfn ) {
 		if (!name)
@@ -101,7 +119,7 @@ main(int argc, char* argv[]) {
 			exit(1);
 		}
 
-		hDump(fh, &root);
+		hDump(fh, &root_def);
 
 		if (fh != stdout)
 			fclose(fh);

@@ -12,11 +12,24 @@ putt(int level) {
 
 static void
 printDef(char *type, ParamDef *def) {
-	printf("%s (%s%s)\t%s\n",
-				type,
-				(def->flags & PARAMDEF_RDONLY) ? "RO" : "RW",
-				(def->flags & PARAMDEF_REQUIRED) ? ", REQ" : "",
-				def->name);
+	if (def->value.type == structType || def->value.type == arrayType) {
+		ParamDef *type_def = def->value.type == structType ?
+			def->value.value.structval :
+			def->value.value.arrayval;
+
+		printf("%s (%s%s)\t%s (%s%s)\n",
+					type,
+					(type_def->flags & PARAMDEF_RDONLY) ? "RO" : "RW",
+					(type_def->flags & PARAMDEF_REQUIRED) ? ", REQ" : "",
+					def->name,
+					(def->flags & PARAMDEF_RDONLY) ? "RO" : "RW",
+					(def->flags & PARAMDEF_REQUIRED) ? ", REQ" : "");
+	} else
+		printf("%s\t%s (%s%s)\n",
+					type,
+					def->name,
+					(def->flags & PARAMDEF_RDONLY) ? "RO" : "RW",
+					(def->flags & PARAMDEF_REQUIRED) ? ", REQ" : "");
 }
 
 static void
